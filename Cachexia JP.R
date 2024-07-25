@@ -2100,20 +2100,23 @@ CANCX_Demographics_v2 %>%
 
 # Bone Metastasis Drug Usage ---------
 
+
 CANCX_Active_pts_3 <- fread("CANCX_Active_pts_3.txt", sep=",",integer64 = "character", stringsAsFactors = F, colClasses = "character")
 
 CANCX_Doses_v2_3 <- fread("CANCX_Doses_v2_3.txt", sep=",", integer64 = "character", stringsAsFactors = F, colClasses = "character")
 unique(CANCX_Doses_v2_3$drug_class)
 
 ActiveCanPts_Neutropenia_BMeta_dxs <- fread("ActiveCanPts_Neutropenia_BMeta_dxs.txt", integer64 = "character", stringsAsFactors = F, colClasses = "character")
-ActiveCANpts_Neutrp_BMeta_rxs <- fread("ActiveCANpts_Neutrp_BMeta_rxs.txt", integer64 = "character", stringsAsFactors = F, colClasses = "character")
 
+ActiveCANpts_Neutrp_BMeta_rxs_final <- fread("ActiveCANpts_Neutrp_BMeta_rxs_final.txt", integer64 = "character", stringsAsFactors = F, colClasses = "character")
+unique(ActiveCANpts_Neutrp_BMeta_rxs_final$generic_name)
 
-
+ActiveCANpts_Neutrp_BMeta_rxs_final <- ActiveCANpts_Neutrp_BMeta_rxs_final %>%
+  filter(generic_name %in% c("Alendronate","Risedronate","Denosumab","Cinacalcet","Etidronate","Zoledronic","Pamidronate"))
 
 
 data.frame(ActiveCanPts_Neutropenia_BMeta_dxs %>% filter(ICD10CODE=="C795") %>% select(PATIENTID) %>% 
-  group_by(PATIENTID) %>% count() %>% filter(n>=5) %>% ungroup()  %>% distinct() %>%
+  group_by(PATIENTID) %>% count() %>% filter(n>=1) %>% ungroup()  %>% distinct() %>%
   left_join(CANCX_Active_pts_3, by=c("PATIENTID"="patid")) %>% group_by(primary_cancer_2) %>%
   summarise(n=sum(as.numeric(weight3))))
 
@@ -2123,25 +2126,33 @@ Mets_Onset <- ActiveCanPts_Neutropenia_BMeta_dxs %>% filter(ICD10CODE=="C795") %
   filter(DATAMONTH==min(DATAMONTH)) %>%
   select(PATIENTID, DATAMONTH) %>% distinct() %>% rename("Mets_Onset"="DATAMONTH")
 
-ActiveCANpts_Neutrp_BMeta_rxs$DATAMONTH <- as.Date(ActiveCANpts_Neutrp_BMeta_rxs$DATAMONTH)
+ActiveCANpts_Neutrp_BMeta_rxs_final$DATAMONTH <- as.Date(ActiveCANpts_Neutrp_BMeta_rxs_final$DATAMONTH)
 
-data.frame(ActiveCANpts_Neutrp_BMeta_rxs %>% inner_join(Mets_Onset) %>% filter(DATAMONTH>Mets_Onset) %>%
-             filter(generic_name!="Filgrastim") %>% select(PATIENTID) %>% distinct() %>%
+data.frame(ActiveCANpts_Neutrp_BMeta_rxs_final %>% inner_join(Mets_Onset) %>% filter(DATAMONTH>Mets_Onset) %>%
+              select(PATIENTID) %>% distinct() %>%
    full_join(CANCX_Doses_v2_3 %>% filter(drug_class=="Radiotherapy") %>% inner_join(Mets_Onset, by=c("patid"="PATIENTID")) %>% 
               mutate(visit_date=as.Date(visit_date)) %>%  filter(visit_date>Mets_Onset) %>%
                 select(patid) %>% distinct(), by=c("PATIENTID"="patid"))  %>%
   inner_join(ActiveCanPts_Neutropenia_BMeta_dxs %>% filter(ICD10CODE=="C795") %>% select(PATIENTID) %>%
-               group_by(PATIENTID) %>% count() %>% filter(n>=5) %>% ungroup() %>%
+               group_by(PATIENTID) %>% count() %>% filter(n>=1) %>% ungroup() %>%
                distinct()) %>% left_join(CANCX_Active_pts_3, by=c("PATIENTID"="patid")) %>% group_by(primary_cancer_2) %>%
   summarise(n=sum(as.numeric(weight3))))
 
 
-data.frame(ActiveCANpts_Neutrp_BMeta_rxs %>% inner_join(Mets_Onset) %>% filter(DATAMONTH>Mets_Onset) %>%
-             filter(generic_name!="Filgrastim") %>% select(PATIENTID) %>% distinct() %>%
-             inner_join(ActiveCanPts_Neutropenia_BMeta_dxs %>% filter(ICD10CODE=="C795") %>% select(PATIENTID) %>% group_by(PATIENTID) %>% count() %>% filter(n>=5) %>% ungroup() %>%
+data.frame(ActiveCANpts_Neutrp_BMeta_rxs_final %>% inner_join(Mets_Onset) %>% filter(DATAMONTH>Mets_Onset) %>%
+             select(PATIENTID) %>% distinct() %>%
+             inner_join(ActiveCanPts_Neutropenia_BMeta_dxs %>% filter(ICD10CODE=="C795") %>% select(PATIENTID) %>% group_by(PATIENTID) %>% count() %>% filter(n>=1) %>% ungroup() %>%
                distinct()) %>% left_join(CANCX_Active_pts_3, by=c("PATIENTID"="patid")) %>% group_by(primary_cancer_2) %>%
   summarise(n=sum(as.numeric(weight3))))
 
+
+
+data.frame(CANCX_Doses_v2_3 %>% filter(drug_class=="Radiotherapy") %>% inner_join(Mets_Onset, by=c("patid"="PATIENTID")) %>% 
+              mutate(visit_date=as.Date(visit_date)) %>%  filter(visit_date>Mets_Onset) %>%
+                select(patid) %>% distinct() %>% rename("PATIENTID"="patid") %>%
+             inner_join(ActiveCanPts_Neutropenia_BMeta_dxs %>% filter(ICD10CODE=="C795") %>% select(PATIENTID) %>% group_by(PATIENTID) %>% count() %>% filter(n>=1) %>% ungroup() %>%
+               distinct()) %>% left_join(CANCX_Active_pts_3, by=c("PATIENTID"="patid")) %>% group_by(primary_cancer_2) %>%
+  summarise(n=sum(as.numeric(weight3))))
 
 # --------------
 # Neutropenia Drug Usage -------------
@@ -2195,18 +2206,23 @@ data.frame(ActiveCanPts_Neutropenia_BMeta_dxs %>% filter(ICD10CODE=="D70" & DATA
 # ------------
 
 # Neutropenia Treatment Rate ALL Filgastrim , Chemotherapy-experienced-------
-ActiveCANpts_Neutrp_AddDrgs_rxs <- fread("ActiveCANpts_Neutrp_AddDrgs_rxs_peg.txt", integer64 = "character", stringsAsFactors = F, colClasses = "character")
-ActiveCANpts_Neutrp_AddDrgs_rxs <- ActiveCANpts_Neutrp_AddDrgs_rxs %>% filter(generic_name=="Pegfilgrastim") %>% select(PATIENTID) %>% distinct()
+# ActiveCANpts_Neutrp_AddDrgs_rxs <- fread("ActiveCANpts_Neutrp_AddDrgs_rxs_peg.txt", integer64 = "character", stringsAsFactors = F, colClasses = "character")
+# ActiveCANpts_Neutrp_AddDrgs_rxs <- ActiveCANpts_Neutrp_AddDrgs_rxs %>% filter(generic_name=="Pegfilgrastim") %>% select(PATIENTID) %>% distinct()
+# 
+# ActiveCANpts_Neutrp_BMeta_rxs <- fread("ActiveCANpts_Neutrp_BMeta_rxs.txt", integer64 = "character", stringsAsFactors = F, colClasses = "character")
+# ActiveCANpts_Neutrp_BMeta_rxs <- ActiveCANpts_Neutrp_BMeta_rxs %>% filter(generic_name=="Filgrastim") %>% select(PATIENTID) %>% distinct()
+# 
+# ActiveCANpts_Neutrp_AddDrgs_rxs_all <- fread("ActiveCANpts_Neutrp_AddDrgs_rxs_all.txt", integer64 = "character", stringsAsFactors = F, colClasses = "character")
+# ActiveCANpts_Neutrp_AddDrgs_rxs_all <- ActiveCANpts_Neutrp_AddDrgs_rxs_all %>% filter(generic_name=="Lenograstim"|generic_name=="Nartograstim") %>% select(PATIENTID) %>% distinct()
+# 
+# Rxs <- ActiveCANpts_Neutrp_BMeta_rxs %>% full_join(ActiveCANpts_Neutrp_AddDrgs_rxs) %>% full_join(ActiveCANpts_Neutrp_AddDrgs_rxs_all) %>% distinct()
 
-ActiveCANpts_Neutrp_BMeta_rxs <- fread("ActiveCANpts_Neutrp_BMeta_rxs.txt", integer64 = "character", stringsAsFactors = F, colClasses = "character")
-ActiveCANpts_Neutrp_BMeta_rxs <- ActiveCANpts_Neutrp_BMeta_rxs %>% filter(generic_name=="Filgrastim") %>% select(PATIENTID) %>% distinct()
+ActiveCANpts_Neutrp_BMeta_rxs_final <- fread("ActiveCANpts_Neutrp_BMeta_rxs_final.txt", integer64 = "character", stringsAsFactors = F, colClasses = "character")
+unique(ActiveCANpts_Neutrp_BMeta_rxs_final$generic_name)
 
-ActiveCANpts_Neutrp_AddDrgs_rxs_all <- fread("ActiveCANpts_Neutrp_AddDrgs_rxs_all.txt", integer64 = "character", stringsAsFactors = F, colClasses = "character")
-ActiveCANpts_Neutrp_AddDrgs_rxs_all <- ActiveCANpts_Neutrp_AddDrgs_rxs_all %>% filter(generic_name=="Lenograstim"|generic_name=="Nartograstim") %>% select(PATIENTID) %>% distinct()
+Rxs <- ActiveCANpts_Neutrp_BMeta_rxs_final %>% filter(generic_name %in% c("Filgrastim", "Lenograstim", "Pegfilgrastim", "Nartograstim")) %>%
+  select(PATIENTID) %>% distinct()
 
-
-
-Rxs <- ActiveCANpts_Neutrp_BMeta_rxs %>% full_join(ActiveCANpts_Neutrp_AddDrgs_rxs) %>% full_join(ActiveCANpts_Neutrp_AddDrgs_rxs_all) %>% distinct()
 
 CANCX_Active_pts_3 <- fread("CANCX_Active_pts_3.txt", sep=",",integer64 = "character", stringsAsFactors = F, colClasses = "character")
 
@@ -2252,6 +2268,7 @@ data.frame(CANCX_Active_pts_3 %>% inner_join(Chemo_exp_pats) %>% inner_join(Neut
   mutate(perc=num/den))
 
 CANCX_Demographics_v2 <- fread("CANCX_Demographics_v2.txt", sep=",", integer64 = "character", stringsAsFactors = F, colClasses = "character")
+
 CANCX_Demographics_v2 <- CANCX_Demographics_v2  %>% select(patid, metastatic_cancer) 
 
 
