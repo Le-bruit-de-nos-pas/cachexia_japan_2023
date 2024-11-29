@@ -96,6 +96,7 @@ fwrite(temp, "temp.csv")
 
 
 CANCX_Active_pts_3 <- fread("CANCX_Active_pts_3.txt", sep=",",integer64 = "character", stringsAsFactors = F, colClasses = "character")
+length(unique(CANCX_Active_pts_3$patid))
 sum(as.numeric(CANCX_Active_pts_3$weight3)) # 3452283, OK
 CancerType_Size <- CANCX_Active_pts_3[ , .(group_sum = sum(as.numeric(weight3))), by = primary_cancer_2] 
 CANCX_Active_pts_3 <- CANCX_Active_pts_3[primary_cancer_2 %in% c("Intestinal Cancer", "Lung Cancer", "Pancreatic Cancer", "Gastrointestinal Cancer"), ]
@@ -111,6 +112,7 @@ CANCX_Active_pts_3 <- merge(CANCX_Active_pts_3[, .(patid, weight3)],
 
 
 CANCX_Diagnosis_Histories_v2 <- fread("CANCX_Diagnosis_Histories_v2.txt", sep=",", integer64 = "character", stringsAsFactors = F, colClasses = "character")
+
 CANCX_Diagnosis_Histories_v2 <- gather(CANCX_Diagnosis_Histories_v2, Month, Dxs, month1:month74, factor_key=TRUE)
 CANCX_Diagnosis_Histories_v2$Month <-  parse_number(as.character(CANCX_Diagnosis_Histories_v2$Month))
 CANCX_Diagnosis_Histories_v2 <- CANCX_Diagnosis_Histories_v2[CANCX_Diagnosis_Histories_v2$Dxs != "-", ]
@@ -155,6 +157,7 @@ Anamorelin_Pats <- Anamorelin_Pats %>% mutate(Anamorelin=ifelse(is.na(Anamorelin
 
 
 CANCX_Demographics_v2 <- fread("CANCX_Demographics_v2.txt", sep=",", integer64 = "character", stringsAsFactors = F, colClasses = "character")
+
 CANCX_Demographics_v2 <- CANCX_Demographics_v2  %>% filter(metastatic_cancer==1) %>% select(patid) 
 
 Anamorelin_Pats <- merge(Anamorelin_Pats,  
@@ -164,6 +167,8 @@ Anamorelin_Pats <- merge(Anamorelin_Pats,
 
 
 CANCX_BMI_records_v2 <- fread("CANCX_BMI_records_v2.txt", sep=",", integer64 = "character", stringsAsFactors = F, colClasses = "character")
+
+length(unique(CANCX_BMI_records_v2$patid))
 
 CANCX_BMI_records_v2 <- merge(Anamorelin_Pats[,.(patid)], 
                                  CANCX_BMI_records_v2, 
@@ -2282,3 +2287,81 @@ data.frame(CANCX_Active_pts_3 %>% inner_join(Chemo_exp_pats) %>% inner_join(CANC
   spread(key=metastatic_cancer, value=den))
 
 # ----------
+# Cachexia Japan Paper Initial numbers -----
+CANCX_BMI_records_v2 <- fread("CANCX_BMI_records_v2.txt", sep=",", integer64 = "character", stringsAsFactors = F, colClasses = "character")
+length(unique(CANCX_BMI_records_v2$patid)) # 434651
+
+CANCX_BMI_records_v2 <- CANCX_BMI_records_v2 %>% select(patid, month, bmi) %>% distinct()
+CANCX_BMI_records_v2$month <- as.numeric(CANCX_BMI_records_v2$month)
+range(CANCX_BMI_records_v2$month)
+CANCX_BMI_records_v2$bmi <- as.numeric(CANCX_BMI_records_v2$bmi)
+  
+CANCX_BMI_records_v2 <- CANCX_BMI_records_v2 %>% group_by(patid, month) %>% summarise(bmi=mean(bmi)) %>% ungroup()
+ 
+CANCX_Demographics_v2 <- fread("CANCX_Demographics_v2.txt", sep=",", integer64 = "character", stringsAsFactors = F, colClasses = "character")
+unique(CANCX_Demographics_v2$primary_cancer)
+CANCX_Demographics_v2 <- CANCX_Demographics_v2 %>% filter(primary_cancer!="Unknown"&primary_cancer!="Unspecified Cancer")
+
+CANCX_BMI_records_v2 <- CANCX_Demographics_v2 %>% select(patid) %>% inner_join(CANCX_BMI_records_v2)
+
+CANCX_Active_pts_3 <- fread("CANCX_Active_pts_3.txt", sep=",",integer64 = "character", stringsAsFactors = F, colClasses = "character")
+
+CANCX_BMI_records_v2 <- CANCX_Active_pts_3 %>% select(patid) %>% distinct() %>% inner_join(CANCX_BMI_records_v2)
+
+length(unique(CANCX_BMI_records_v2$patid)) # 172656
+
+target_pats <- CANCX_BMI_records_v2 %>% select(patid) %>% distinct()
+
+CANCX_BMI_records_v2 <- CANCX_BMI_records_v2 %>% 
+  left_join(CANCX_BMI_records_v2 %>% rename("month_2"="month") %>% rename("bmi_2"="bmi"))
+
+CANCX_BMI_records_v2 <- CANCX_BMI_records_v2 %>% filter(month_2>month)
+
+
+
+CANCX_BMI_records_v2 <- CANCX_BMI_records_v2 %>% mutate(Drop95=ifelse( (bmi_2<(bmi*0.95)) & (month_2>month) & (month_2-month<=6) ,1,0 ))
+CANCX_BMI_records_v2 <- CANCX_BMI_records_v2 %>% mutate(Drop90=ifelse( (bmi_2<(bmi*0.90)) & (month_2>month) & (month_2-month<=12) ,1,0 ))
+CANCX_BMI_records_v2 <- CANCX_BMI_records_v2 %>% mutate(Drop2_20=ifelse( (bmi_2<(bmi*0.98)) & (month_2>month) & (bmi_2<20) ,1,0 ))
+
+
+New_Cachexia_Pred <- CANCX_BMI_records_v2 %>% filter(Drop90==1 | Drop95==1 | Drop2_20==1) %>% 
+  select(patid, Drop95, Drop90, Drop2_20) %>% distinct()
+
+New_Cachexia_Pred <- New_Cachexia_Pred %>% select(patid) %>% distinct()
+
+length(New_Cachexia_Pred$patid)/length(target_pats$patid)
+
+
+
+data.frame(target_pats %>% 
+  left_join(CANCX_Demographics_v2 %>% select(patid, primary_cancer)) %>% group_by(primary_cancer) %>% count()  %>% rename("den"="n") %>%
+  left_join(New_Cachexia_Pred %>% 
+  left_join(CANCX_Demographics_v2 %>% select(patid, primary_cancer)) %>% group_by(primary_cancer) %>% count() %>% rename("num"="n")
+  ) %>% mutate(perc=num/den) %>% arrange(-perc))
+
+
+
+
+CANCX_BMI_records_v2 <- CANCX_BMI_records_v2 %>% mutate(Drop95=ifelse( (bmi_2<(bmi*0.95)) & (month_2>=60) & (month_2>month) & (month_2-month<=6) ,1,0 ))
+CANCX_BMI_records_v2 <- CANCX_BMI_records_v2 %>% mutate(Drop90=ifelse( (bmi_2<(bmi*0.90)) & (month_2>=60) & (month_2>month) & (month_2-month<=12) ,1,0 ))
+CANCX_BMI_records_v2 <- CANCX_BMI_records_v2 %>% mutate(Drop2_20=ifelse( (bmi_2<(bmi*0.98)) & (month_2>=60) & (month_2>month) & (bmi_2<20) ,1,0 ))
+
+New_Cachexia_Pred <- CANCX_BMI_records_v2 %>% filter(Drop90==1 | Drop95==1 | Drop2_20==1) %>% 
+  select(patid, Drop95, Drop90, Drop2_20) %>% distinct()
+
+New_Cachexia_Pred <- New_Cachexia_Pred %>% select(patid) %>% distinct()
+
+length(New_Cachexia_Pred$patid)/length(target_pats$patid)
+
+Drop95 <- CANCX_BMI_records_v2 %>% filter(Drop95==1) %>% select(patid) %>% distinct()
+Drop90 <- CANCX_BMI_records_v2 %>% filter(Drop90==1) %>% select(patid) %>% distinct()
+Drop2_20 <- CANCX_BMI_records_v2 %>% filter(Drop2_20==1) %>% select(patid) %>% distinct()
+
+data.frame(target_pats %>% 
+  left_join(CANCX_Demographics_v2 %>% select(patid, primary_cancer)) %>% group_by(primary_cancer) %>% count()  %>% rename("den"="n") %>%
+  left_join(New_Cachexia_Pred %>% 
+  left_join(CANCX_Demographics_v2 %>% select(patid, primary_cancer)) %>% group_by(primary_cancer) %>% count() %>% rename("num"="n")
+  ) %>% mutate(perc=num/den) %>% arrange(-perc))
+
+
+# --------
